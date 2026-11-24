@@ -13,6 +13,7 @@
       <span class="brand-name">Ken CCTV</span>
     </div>
     <div class="summary" id="summary">—</div>
+    <button type="button" class="btn" id="open-playback" title="Xem lại bản ghi trên NAS">Xem lại</button>
     <time class="clock" id="clock">--:--:--</time>
   </header>
 
@@ -22,12 +23,42 @@
     <div class="viewer-bar">
       <div class="viewer-title" id="viewer-title"></div>
       <div class="viewer-actions">
+        <button type="button" class="btn" id="viewer-playback" title="Xem lại camera này">Xem lại</button>
         <button type="button" class="btn" id="viewer-snap" title="Chụp ảnh">Chụp ảnh</button>
         <button type="button" class="btn" id="viewer-audio" title="Bật/tắt tiếng">Bật tiếng</button>
         <button type="button" class="btn btn-close" id="viewer-close" title="Đóng (Esc)">Đóng</button>
       </div>
     </div>
     <div class="viewer-body" id="viewer-body"></div>
+  </dialog>
+
+  <dialog class="viewer playback" id="playback">
+    <div class="viewer-bar">
+      <div class="pb-pickers">
+        <select class="btn" id="pb-cam" aria-label="Camera"></select>
+        <select class="btn" id="pb-date" aria-label="Ngày"></select>
+      </div>
+      <div class="viewer-actions">
+        <button type="button" class="btn" id="pb-prev" title="Đoạn trước">‹ Trước</button>
+        <button type="button" class="btn" id="pb-next" title="Đoạn sau">Sau ›</button>
+        <a class="btn" id="pb-download" download title="Tải đoạn đang xem">Tải về</a>
+        <button type="button" class="btn btn-close" id="pb-close" title="Đóng (Esc)">Đóng</button>
+      </div>
+    </div>
+    <div class="viewer-body pb-body">
+      <video id="pb-video" controls playsinline preload="metadata"></video>
+      <div class="pb-msg" id="pb-msg" hidden></div>
+    </div>
+    <div class="pb-foot">
+      <div class="pb-time" id="pb-time">--:--:--</div>
+      <div class="pb-timeline" id="pb-timeline" role="slider" tabindex="0" aria-label="Dòng thời gian trong ngày">
+        <div class="pb-segs" id="pb-segs"></div>
+        <div class="pb-head" id="pb-head" hidden></div>
+      </div>
+      <div class="pb-hours" aria-hidden="true">
+        <span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span>
+      </div>
+    </div>
   </dialog>
 
   <template id="tile-tpl">

@@ -40,6 +40,18 @@ server {
     proxy_read_timeout 1h;
   }
 
+  # Recordings (NAS volume mounted read-only at /recordings). Directory listings are JSON
+  # for the playback page; MP4 files support range requests for seeking.
+  location /recordings/ {
+    limit_except GET {
+      deny all;
+    }
+    root /;
+    autoindex on;
+    autoindex_format json;
+    add_header Cache-Control "no-cache";
+  }
+
   # go2rtc's player script, served from go2rtc so it always matches the server version
   location = /video-rtc.js {
     proxy_pass http://${GO2RTC_UPSTREAM};

@@ -225,6 +225,213 @@ document.getElementById('viewer-snap').addEventListener('click', () => {
   a.click();
 });
 
+// ---------- playback (recordings on the NAS) ----------
+// The recorder writes /recordings/<stream>/YYYY-MM-DD_HH-MM-SS.mp4 (local time, 5-minute
+// files); nginx lists a folder as JSON. Times are wall-clock strings, no time-zone maths.
+const SEGMENT_S = 300;
+const DAY_S = 86400;
+const REC_NAME = /^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})\.mp4$/;
+
+const pb = {
+  dialog: document.getElementById('playback'),
+  cam: document.getElementById('pb-cam'),
+  date: document.getElementById('pb-date'),
+  video: document.getElementById('pb-video'),
+  msg: document.getElementById('pb-msg'),
+  time: document.getElementById('pb-time'),
+  timeline: document.getElementById('pb-timeline'),
+  segs: document.getElementById('pb-segs'),
+  head: document.getElementById('pb-head'),
+  download: document.getElementById('pb-download'),
+  files: [], // all recordings of the selected camera: { date, start, name }
+  day: [], // recordings of the selected date, sorted: { start, end, name, live }
+  current: -1, // index in pb.day
+};
+let allCams = [];
+
+const pad = (n) => String(n).padStart(2, '0');
+const hms = (s) => `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(Math.floor(s % 60))}`;
+
+// Local date and seconds-of-day in Vietnam, to spot the file still being written.
+function nowInVietnam() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, secs: +p.hour * 3600 + +p.minute * 60 + +p.second };
+}
+
+function showPbMsg(text) {
+  pb.msg.textContent = text;
+  pb.msg.hidden = !text;
+}
+
+async function listRecordings(stream) {
+  const res = await fetch(`/recordings/${encodeURIComponent(stream)}/`, { cache: 'no-store' });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const files = [];
+  for (const f of await res.json()) {
+    const m = f.type === 'file' && REC_NAME.exec(f.name);
+    if (m) files.push({ date: m[1], start: +m[2] * 3600 + +m[3] * 60 + +m[4], name: f.name });
+  }
+  return files;
+}
+
+function buildDay(date) {
+  const now = nowInVietnam();
+  const day = pb.files.filter((f) => f.date === date).sort((a, b) => a.start - b.start);
+  pb.day = day.map((f, i) => {
+    const next = day[i + 1]?.start ?? DAY_S;
+    const end = Math.min(next, f.start + SEGMENT_S, DAY_S);
+    // newest file of today whose 5 minutes are not over yet is still being written
+    const live = date === now.date && i === day.length - 1 && now.secs < f.start + SEGMENT_S + 30;
+    return { start: f.start, end, name: f.name, live };
+  });
+  pb.segs.replaceChildren(...pb.day.map((s) => {
+    const el = document.createElement('div');
+    el.className = s.live ? 'pb-seg is-live' : 'pb-seg';
+    el.style.left = `${(s.start / DAY_S) * 100}%`;
+    el.style.width = `${((s.end - s.start) / DAY_S) * 100}%`;
+    return el;
+  }));
+}
+
+function playSegment(i, offset = 0) {
+  const seg = pb.day[i];
+  if (!seg) return;
+  if (seg.live) {
+    showPbMsg('Đoạn này đang được ghi, xem được sau vài phút. Muốn xem ngay thì dùng màn hình trực tiếp.');
+    return;
+  }
+  pb.current = i;
+  showPbMsg('');
+  const url = `/recordings/${encodeURIComponent(pb.cam.value)}/${seg.name}`;
+  pb.download.href = url;
+  pb.download.setAttribute('download', `${pb.cam.value}_${seg.name}`);
+  pb.video.src = url;
+  pb.video.onloadedmetadata = () => {
+    if (offset > 0) pb.video.currentTime = Math.min(offset, Math.max(0, pb.video.duration - 1));
+    pb.video.play().catch(() => {});
+  };
+  updateHead();
+}
+
+// Play the recording covering second `t` of the day, or the next one after it.
+function seekDay(t) {
+  let i = pb.day.findIndex((s) => t >= s.start && t < s.end);
+  let offset = 0;
+  if (i >= 0) offset = t - pb.day[i].start;
+  else i = pb.day.findIndex((s) => s.start > t);
+  if (i < 0) {
+    showPbMsg('Không có bản ghi sau thời điểm này.');
+    return;
+  }
+  playSegment(i, offset);
+}
+
+function updateHead() {
+  const seg = pb.day[pb.current];
+  if (!seg) {
+    pb.head.hidden = true;
+    pb.time.textContent = pb.day.length ? 'Bấm vào dòng thời gian để xem' : '--:--:--';
+    return;
+  }
+  const t = seg.start + (pb.video.currentTime || 0);
+  pb.head.hidden = false;
+  pb.head.style.left = `${(t / DAY_S) * 100}%`;
+  pb.time.textContent = `${pb.date.value} · ${hms(t)}`;
+}
+
+async function loadCamera(stream, preferDate) {
+  pb.video.removeAttribute('src');
+  pb.video.load();
+  pb.current = -1;
+  pb.files = [];
+  pb.date.replaceChildren();
+  pb.segs.replaceChildren();
+  showPbMsg('Đang tải danh sách bản ghi…');
+  try {
+    pb.files = await listRecordings(stream);
+  } catch (err) {
+    showPbMsg(`Không đọc được bản ghi: ${err.message}`);
+    updateHead();
+    return;
+  }
+  const dates = [...new Set(pb.files.map((f) => f.date))].sort().reverse();
+  if (!dates.length) {
+    showPbMsg('Camera này chưa có bản ghi nào.');
+    updateHead();
+    return;
+  }
+  pb.date.replaceChildren(...dates.map((d) => new Option(d.split('-').reverse().join('/'), d)));
+  pb.date.value = dates.includes(preferDate) ? preferDate : dates[0];
+  showPbMsg('');
+  selectDate();
+}
+
+function selectDate() {
+  buildDay(pb.date.value);
+  pb.current = -1;
+  pb.video.removeAttribute('src');
+  pb.video.load();
+  // start at the most recent finished recording of that day
+  const last = pb.day.findLastIndex((s) => !s.live);
+  if (last >= 0) playSegment(last);
+  else updateHead();
+}
+
+function openPlayback(cam) {
+  if (!allCams.length) return;
+  pb.cam.replaceChildren(...allCams.map((c) => new Option(
+    `${c.name}${c.location ? ' · ' + c.location : ''}`, c.stream)));
+  pb.cam.value = (cam || allCams[0]).stream;
+  pb.dialog.showModal();
+  loadCamera(pb.cam.value);
+}
+
+pb.cam.addEventListener('change', () => loadCamera(pb.cam.value, pb.date.value));
+pb.date.addEventListener('change', selectDate);
+pb.video.addEventListener('timeupdate', updateHead);
+pb.video.addEventListener('ended', () => {
+  const next = pb.current + 1;
+  if (pb.day[next] && !pb.day[next].live) playSegment(next);
+});
+pb.video.addEventListener('error', () => {
+  if (!pb.video.getAttribute('src')) return;
+  showPbMsg('Không phát được đoạn này. File có thể bị lỗi (camera mất kết nối khi đang ghi), '
+    + 'hoặc trình duyệt không hỗ trợ H.265. Thử "Tải về" hoặc đoạn khác.');
+});
+document.getElementById('pb-prev').addEventListener('click', () => {
+  if (pb.current > 0) playSegment(pb.current - 1);
+});
+document.getElementById('pb-next').addEventListener('click', () => {
+  if (pb.current < pb.day.length - 1) playSegment(pb.current + 1);
+});
+pb.timeline.addEventListener('click', (e) => {
+  const r = pb.timeline.getBoundingClientRect();
+  seekDay(((e.clientX - r.left) / r.width) * DAY_S);
+});
+pb.timeline.addEventListener('keydown', (e) => {
+  const step = { ArrowLeft: -60, ArrowRight: 60, PageUp: -600, PageDown: 600 }[e.key];
+  const seg = pb.day[pb.current];
+  if (!step || !seg) return;
+  e.preventDefault();
+  seekDay(seg.start + (pb.video.currentTime || 0) + step);
+});
+document.getElementById('pb-close').addEventListener('click', () => pb.dialog.close());
+pb.dialog.addEventListener('close', () => {
+  pb.video.pause();
+  pb.video.removeAttribute('src');
+  pb.video.load();
+});
+document.getElementById('open-playback').addEventListener('click', () => openPlayback());
+document.getElementById('viewer-playback').addEventListener('click', () => {
+  const cam = viewerCam;
+  viewer.close();
+  openPlayback(cam);
+});
+
 // ---------- clock ----------
 const clock = document.getElementById('clock');
 const fmt = new Intl.DateTimeFormat('vi-VN', {
@@ -243,6 +450,7 @@ async function main() {
   ]);
 
   grid.dataset.count = String(cams.length);
+  allCams = cams.filter((cam) => streams[cam.stream]);
   for (const cam of cams) renderTile(cam, Boolean(streams[cam.stream]));
   layoutGrid();
 }

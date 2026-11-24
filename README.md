@@ -8,6 +8,7 @@ Chạy trên k3s qua Argo CD. Manifest nằm ở repo `ken-gitops`, thư mục `
 - Push lên `master` (sửa `dashboard/`, `nginx/` hoặc `Dockerfile`) thì workflow [Release](.github/workflows/release.yml) build `ghcr.io/kenshin17/ken-cctv-dashboard`, sửa tag trong ken-gitops, rồi sync Argo CD.
 - go2rtc chạy `hostNetwork` trên node `lenovo-m7q`. Secret camera và token Xiaomi nằm trong Kubernetes Secret `ken-cctv-secret`, **không** nằm trong repo này (repo public).
 - Danh sách stream cho k3s nằm ở `ken-gitops/.../go2rtc.yaml`. Thêm camera thì sửa file đó và `dashboard/cameras.json`.
+- **Ghi hình 24/7 lên NAS** (chỉ có trên k3s): `cctv-recorder` ghi file MP4 5 phút cho từng camera, giữ 7 ngày. Xem lại bằng nút **Xem lại** trên dashboard: chọn camera, chọn ngày, bấm vào dòng thời gian. Chi tiết ở README trong ken-gitops.
 
 Docker Compose bên dưới dùng để chạy thử, hoặc chạy trên một máy Linux riêng không có k3s.
 
