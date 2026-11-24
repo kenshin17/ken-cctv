@@ -20,7 +20,7 @@ env:
   GITOPS_REPOSITORY: kenshin17/ken-gitops
   GITOPS_BRANCH: master
   GITOPS_PATH: kustomize/cctv/production
-  ARGOCD_APP_NAME: ken-cctv-production
+  ARGOCD_APP_NAME: cctv
 
 jobs:
   check:
