@@ -1,0 +1,34 @@
+# go2rtc config. ${VAR} values come from ../.env (loaded by docker compose).
+# Web UI: http://<server-ip>:1984
+
+api:
+  listen: ":1984"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    # LAN IP of the machine running Docker, so browsers in the LAN can reach WebRTC
+    - ${HOST_LAN_IP}:8555
+    - stun:8555
+
+streams:
+  # Tapo C200: create a "Camera Account" in the Tapo app (Advanced settings > Camera Account)
+  # stream1 = 1080p/HD, stream2 = 360p/SD
+  tapo_c200:
+    - rtsp://${TAPO_USER}:${TAPO_PASS}@${TAPO_IP}:554/stream1
+  tapo_c200_sd:
+    - rtsp://${TAPO_USER}:${TAPO_PASS}@${TAPO_IP}:554/stream2
+
+  # EZTV: full RTSP URL in .env because the path differs by model
+  eztv:
+    - ${EZTV_RTSP_URL}
+
+  # Xiaomi Hà Nội: add it from the Web UI (Add > Xiaomi > login), then copy the
+  # generated xiaomi://... URL here. go2rtc fetches keys from the cloud but streams over the LAN.
+  # xiaomi_hn:
+  #   - xiaomi://<user_id>:<region>@<camera_lan_ip>?did=<did>&model=<model>
+
+  # Xiaomi Thái Bình: NOT reachable from Hà Nội with go2rtc (LAN only). See PLAN.md.

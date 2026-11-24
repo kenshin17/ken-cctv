@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ken CCTV</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="rec-dot" aria-hidden="true"></span>
+      <span class="brand-name">Ken CCTV</span>
+    </div>
+    <div class="summary" id="summary">—</div>
+    <time class="clock" id="clock">--:--:--</time>
+  </header>
+
+  <main class="grid" id="grid" aria-live="polite"></main>
+
+  <dialog class="viewer" id="viewer">
+    <div class="viewer-bar">
+      <div class="viewer-title" id="viewer-title"></div>
+      <div class="viewer-actions">
+        <button type="button" class="btn" id="viewer-snap" title="Chụp ảnh">Chụp ảnh</button>
+        <button type="button" class="btn" id="viewer-audio" title="Bật/tắt tiếng">Bật tiếng</button>
+        <button type="button" class="btn btn-close" id="viewer-close" title="Đóng (Esc)">Đóng</button>
+      </div>
+    </div>
+    <div class="viewer-body" id="viewer-body"></div>
+  </dialog>
+
+  <template id="tile-tpl">
+    <article class="tile" tabindex="0">
+      <div class="tile-media"></div>
+      <div class="tile-overlay">
+        <div class="tile-head">
+          <span class="badge"><span class="dot"></span><span class="badge-text">Đang kết nối</span></span>
+          <span class="mode"></span>
+        </div>
+        <div class="tile-msg"></div>
+        <div class="tile-foot">
+          <div>
+            <div class="tile-name"></div>
+            <div class="tile-loc"></div>
+          </div>
+          <span class="tile-res"></span>
+        </div>
+      </div>
+      <div class="tile-empty" hidden>
+        <div class="tile-empty-title"></div>
+        <div class="tile-empty-hint"></div>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

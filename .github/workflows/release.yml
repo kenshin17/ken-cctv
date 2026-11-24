@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "dashboard/**"
+      - "nginx/**"
+      - "Dockerfile"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/ken-cctv-dashboard
+  GITOPS_REPOSITORY: kenshin17/ken-gitops
+  GITOPS_BRANCH: master
+  GITOPS_PATH: kustomize/ken-cctv/production
+  ARGOCD_APP_NAME: ken-cctv-production
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate cameras.json
+        run: python3 -m json.tool dashboard/cameras.json > /dev/null
+
+      - name: Validate nginx config
+        run: |
+          docker build -t dashboard-check .
+          docker run --rm -e GO2RTC_UPSTREAM=127.0.0.1:1984 dashboard-check \
+            sh -c '/docker-entrypoint.sh nginx -t'
+
+  build:
+    name: Build
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Prepare GITHUB_ENV
+        run: |
+          {
+            echo "GIT_TAG=${GITHUB_REF#refs/*/}"
+            echo "SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-8)"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/arm64,linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.GIT_TAG }}
+            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.GIT_TAG }}-${{ env.SHORT_SHA }}
+
+      - name: Export image tag
+        id: meta
+        run: echo "image=${DOCKER_REGISTRY}/${IMAGE_NAME}:${GIT_TAG}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+  update-image:
+    name: Update GitOps image
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Verify GitOps token
+        env:
+          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        if: env.GITOPS_TOKEN == ''
+        run: |
+          echo "::error::Secret GITOPS_TOKEN is not set. Create a fine-grained PAT with Contents read+write on ${GITOPS_REPOSITORY} and add it as repository secret GITOPS_TOKEN."
+          exit 1
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.GITOPS_REPOSITORY }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          ref: ${{ env.GITOPS_BRANCH }}
+
+      - name: Setup Kustomize
+        run: |
+          curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz" -o /tmp/kustomize.tgz
+          tar -xzf /tmp/kustomize.tgz -C /usr/local/bin
+          kustomize version
+
+      - name: Update Kubernetes resources
+        env:
+          GITHUB_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          NEW_IMAGE: ${{ needs.build.outputs.image }}
+        run: |
+          git config --global user.email "ci@github.com"
+          git config --global user.name "GitHub Actions"
+
+          cd "$GITOPS_PATH"
+          kustomize edit set image "${DOCKER_REGISTRY}/${IMAGE_NAME}=${NEW_IMAGE}"
+          cat kustomization.yaml
+
+          git add kustomization.yaml
+          git commit -m "[${{ github.repository }}] ${GITHUB_ACTOR} - ${GITHUB_COMMIT_MESSAGE:-manual deploy}" || true
+          git push origin "$GITOPS_BRANCH"
+
+  deploy:
+    name: Sync ArgoCD
+    needs: update-image
+    runs-on: ubuntu-latest
+    env:
+      ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+      ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+      ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
+    steps:
+      - name: Install ArgoCD CLI
+        if: env.ARGOCD_SERVER != ''
+        uses: clowdhaus/argo-cd-action@v1.12.1
+
+      - name: Sync ArgoCD App
+        if: env.ARGOCD_SERVER != ''
+        run: |
+          argocd login --insecure "$ARGOCD_SERVER" --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD"
+          argocd --server "$ARGOCD_SERVER" --insecure app sync "$ARGOCD_APP_NAME"

@@ -1,0 +1,8 @@
+.env
+# go2rtc writes the Xiaomi account token into the config after login,
+# so the live config stays local; go2rtc.example.yaml is the committed template
+go2rtc/go2rtc.yaml
+go2rtc/*.bak
+node_modules/
+recordings/
+.DS_Store

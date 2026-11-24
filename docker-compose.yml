@@ -1,0 +1,28 @@
+# Production: Linux server in the Hà Nội LAN.
+# Host networking is required: Xiaomi cameras use UDP P2P on the LAN, and replies are
+# dropped behind Docker's NAT. On macOS use docker-compose.mac.yml instead (see README).
+
+services:
+  go2rtc:
+    image: alexxit/go2rtc:1.9.15
+    container_name: ken-go2rtc
+    restart: unless-stopped
+    network_mode: host    # ports 1984 (UI/API), 8554 (RTSP), 8555 (WebRTC) open directly on the host
+    env_file: .env
+    volumes:
+      # Mount the whole folder: go2rtc writes the Xiaomi login token into go2rtc.yaml
+      - ./go2rtc:/config
+
+  dashboard:
+    image: nginx:1.27-alpine
+    container_name: ken-dashboard
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      - go2rtc
+    environment:
+      NGINX_PORT: "8080"
+      GO2RTC_UPSTREAM: "127.0.0.1:1984"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./nginx:/etc/nginx/templates:ro

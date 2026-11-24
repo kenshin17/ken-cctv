@@ -1,0 +1,21 @@
+[
+  {
+    "id": "tapo_c200",
+    "name": "Tapo C200",
+    "location": "Hà Nội",
+    "stream": "tapo_c200",
+    "sub": "tapo_c200_sd"
+  },
+  {
+    "id": "eztv",
+    "name": "EZTV",
+    "location": "Hà Nội",
+    "stream": "eztv"
+  },
+  {
+    "id": "xiaomi_hn",
+    "name": "Phòng khách",
+    "location": "Hà Nội",
+    "stream": "xiaomi_hn"
+  }
+]
