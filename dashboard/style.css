@@ -29,7 +29,8 @@ html, body {
 body {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 /* ---------- top bar ---------- */
@@ -60,22 +61,26 @@ body {
 .clock { font-variant-numeric: tabular-nums; color: var(--muted); }
 
 /* ---------- grid ---------- */
+/* All tiles fit in one screen: app.js picks the column count that gives the largest
+   16:9 tile for the current window and sets --tile-w. The last row is centred. */
 .grid {
   flex: 1;
-  display: grid;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
   gap: var(--gap);
   padding: var(--gap);
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  align-content: start;
-}
-
-@media (min-width: 900px) {
-  .grid[data-count="3"], .grid[data-count="4"] { grid-template-columns: repeat(2, 1fr); }
+  padding-bottom: max(var(--gap), env(safe-area-inset-bottom));
+  overflow: auto;
 }
 
 /* ---------- tile ---------- */
 .tile {
   position: relative;
+  flex: 0 0 auto;
+  width: var(--tile-w, 100%);
   aspect-ratio: 16 / 9;
   background: #000;
   border: 1px solid var(--line);

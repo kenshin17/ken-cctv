@@ -151,6 +151,33 @@ function renderTile(cam, configured) {
   grid.appendChild(tile);
 }
 
+// ---------- fit all tiles in one screen ----------
+const ASPECT = 16 / 9;
+
+// Try every column count and keep the one whose 16:9 tiles are largest while
+// every row still fits in the grid's height.
+function layoutGrid() {
+  const n = grid.querySelectorAll('.tile').length;
+  if (!n) return;
+  const cs = getComputedStyle(grid);
+  const gap = parseFloat(cs.columnGap) || 0;
+  const w = grid.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const h = grid.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  if (w <= 0 || h <= 0) return;
+
+  let best = 0;
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const byWidth = (w - gap * (cols - 1)) / cols;
+    const byHeight = ((h - gap * (rows - 1)) / rows) * ASPECT;
+    best = Math.max(best, Math.min(byWidth, byHeight));
+  }
+  // floor (minus a hair) so rounding never pushes a tile onto an extra row
+  grid.style.setProperty('--tile-w', `${Math.max(0, Math.floor(best) - 1)}px`);
+}
+
+new ResizeObserver(layoutGrid).observe(grid);
+
 // ---------- full-screen viewer ----------
 const viewer = document.getElementById('viewer');
 const viewerBody = document.getElementById('viewer-body');
@@ -217,6 +244,7 @@ async function main() {
 
   grid.dataset.count = String(cams.length);
   for (const cam of cams) renderTile(cam, Boolean(streams[cam.stream]));
+  layoutGrid();
 }
 
 main().catch((err) => {
