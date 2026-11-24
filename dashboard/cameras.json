@@ -10,7 +10,8 @@
     "id": "eztv",
     "name": "EZTV",
     "location": "Hà Nội",
-    "stream": "eztv"
+    "stream": "eztv",
+    "sub": "eztv_sd"
   },
   {
     "id": "xiaomi_hn",

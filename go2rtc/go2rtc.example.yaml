@@ -25,6 +25,9 @@ streams:
   # EZTV: full RTSP URL in .env because the path differs by model
   eztv:
     - ${EZTV_RTSP_URL}
+  # Sub stream for the dashboard grid, transcoded to H.264 (the camera sends H.265)
+  eztv_sd:
+    - ffmpeg:${EZTV_RTSP_SUB_URL}#video=h264
 
   # Xiaomi Hà Nội: add it from the Web UI (Add > Xiaomi > login), then copy the
   # generated xiaomi://... URL here. go2rtc fetches keys from the cloud but streams over the LAN.
