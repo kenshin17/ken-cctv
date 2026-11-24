@@ -19,7 +19,7 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/ken-cctv-dashboard
   GITOPS_REPOSITORY: kenshin17/ken-gitops
   GITOPS_BRANCH: master
-  GITOPS_PATH: kustomize/ken-cctv/production
+  GITOPS_PATH: kustomize/cctv/production
   ARGOCD_APP_NAME: ken-cctv-production
 
 jobs:
